@@ -19,7 +19,11 @@ class DataCleaner:
         legacy["address"] = legacy["address"].str.split("\\n")                                                  # split the corupted addresses at the point '\n'.
         legacy["address"] = legacy["address"].apply(lambda x: ", ".join(x))                                     # join the lists from previous line into strings by applying a join to the lists. 
         legacy["date_of_birth"] = pd.to_datetime(legacy["date_of_birth"], errors="coerce", format="%Y-%m-%d")   # set 'date_of_birth' column to datetime64 format.
-        legacy = legacy.dropna()                                                                                # drop the resulant NaT values 
+        legacy = legacy.dropna()                                                                                # drop the resulant NaT values.
+        regex = "^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$"
+        legacy["email_address"] = legacy["email_address"].astype("str")                                         # set email_address column to str type to allow for application of regex.
+        wrong_emails = legacy["email_address"].loc[~legacy["email_address"].str.match(regex)].str.split("@@")   # apply regex to email address column and strip emails with repeated @ symbol which fail regex test.
+        wrong_emails.apply(lambda x: "@".join(x))                                                               # replace split emails with singluar @ symbol to allow for inclusion in the dataframe.                                                                              # drop the resulant NaT values 
         legacy.info()
         
         print(legacy["address"].head(30))
