@@ -22,8 +22,20 @@ class DataCleaner:
         legacy = legacy.dropna()                                                                                # drop the resulant NaT values.
         email_regex = "^([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$"
         legacy["email_address"] = legacy["email_address"].str.replace("@@", "@", regex=False)                   # replace instances of '@@' with '@'                
-       
+        legacy["phone_number"] = legacy["phone_number"].replace({r"\+44": "", r"\(0": "0", r"\)": "", r"\ ": ""}, regex=True)
         
+        # some manipulations with phone data: closer than before
+        de_phone_regex = "^(\+49|0)(\d{2,4})?(\s?\d{3,4}){1,3}$"
+        de_mask = legacy["country"].isin(["DE"])
+        legacy_de = legacy[de_mask]
+        legacy["de_nums"] = legacy_de["phone_number"].loc[~legacy_de["phone_number"].str.match(de_phone_regex)]
+        legacy["de_nums"] = legacy["de_nums"].replace({r"\+49": "", r"\)": "", r"\(0": "", r"\ ": ""}, regex=True)
+        legacy["de_nums"] = legacy["de_nums"].apply(lambda x: str(x))
+        legacy["de_nums"] = legacy["de_nums"].apply(lambda x: x[0:5] + " " + x[5:11])
+        legacy.loc[legacy["country"] == "DE", "phone_number"] = legacy["de_nums"]
+        legacy["phone_number"] = legacy["phone_number"].replace({r"\+44": "", r"\(0": "0", r"\)": "", r"\ ": ""}, regex=True)
+        display(legacy["de_nums"])
+        display(legacy["phone_number"])
         
 
 x = DataCleaner()
