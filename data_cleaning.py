@@ -24,7 +24,19 @@ class DataCleaner:
         legacy["email_address"] = legacy["email_address"].str.replace("@@", "@", regex=False)                   # replace instances of '@@' with '@'                
         legacy["phone_number"] = legacy["phone_number"].replace({r"\+44": "", r"\(0": "0", r"\)": "", r"\ ": ""}, regex=True)
         
-        # some manipulations with phone data: closer than before
+        # updated manipulations with phone data. 
+        gb_phone_regex = "^((\(?0\d{4}\)?\s?\d{3}\s?\d{3})|(\(?0\d{3}\)?\s?\d{3}\s?\d{4})|(\(?0\d{2}\)?\s?\d{4}\s?\d{4}))(\s?\#(\d{4}|\d{3}))?$"
+        gb_mask = legacy["country"].isin(["GB"])
+        legacy_gb = legacy[gb_mask]
+        legacy["gb_nums"] = legacy_gb["phone_number"].loc[~legacy_gb["phone_number"].str.match(gb_phone_regex)]
+        legacy["gb_nums"] = legacy["gb_nums"].replace({r"\+44": "", r"\(0": "0", r"\)": "", r"\ ": ""}, regex=True)
+        legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: str(x))
+        legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: x[0:5] + " " + x[5:12])
+        len_check = legacy[legacy["gb_nums"].apply(lambda x: len(x) == 10)].index
+        legacy["gb_nums"] = legacy["gb_nums"].drop(len_check)
+        legacy.loc[legacy["country"] == "GB", "phone_number"] = legacy["gb_nums"]
+        
+
         de_phone_regex = "^(\+49|0)(\d{2,4})?(\s?\d{3,4}){1,3}$"
         de_mask = legacy["country"].isin(["DE"])
         legacy_de = legacy[de_mask]
@@ -32,10 +44,10 @@ class DataCleaner:
         legacy["de_nums"] = legacy["de_nums"].replace({r"\+49": "", r"\)": "", r"\(0": "", r"\ ": ""}, regex=True)
         legacy["de_nums"] = legacy["de_nums"].apply(lambda x: str(x))
         legacy["de_nums"] = legacy["de_nums"].apply(lambda x: x[0:5] + " " + x[5:11])
+        len_check = legacy[legacy["de_nums"].apply(lambda x: len(x) == 10)].index
+        legacy["gb_nums"] = legacy["de_nums"].drop(len_check)
         legacy.loc[legacy["country"] == "DE", "phone_number"] = legacy["de_nums"]
-        legacy["phone_number"] = legacy["phone_number"].replace({r"\+44": "", r"\(0": "0", r"\)": "", r"\ ": ""}, regex=True)
-        display(legacy["de_nums"])
-        display(legacy["phone_number"])
+        
         
 
 x = DataCleaner()
