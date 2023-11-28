@@ -25,28 +25,49 @@ class DataCleaner:
         legacy["phone_number"] = legacy["phone_number"].replace({r"\+44": "", r"\(0": "0", r"\)": "", r"\ ": ""}, regex=True)
         
         # updated manipulations with phone data. 
+       
+        # UK phone number non regex-matched data cleaning 
         gb_phone_regex = "^((\(?0\d{4}\)?\s?\d{3}\s?\d{3})|(\(?0\d{3}\)?\s?\d{3}\s?\d{4})|(\(?0\d{2}\)?\s?\d{4}\s?\d{4}))(\s?\#(\d{4}|\d{3}))?$"
         gb_mask = legacy["country"].isin(["GB"])
         legacy_gb = legacy[gb_mask]
         legacy["gb_nums"] = legacy_gb["phone_number"].loc[~legacy_gb["phone_number"].str.match(gb_phone_regex)]
-        legacy["gb_nums"] = legacy["gb_nums"].replace({r"\+44": "", r"\(0": "0", r"\)": "", r"\ ": ""}, regex=True)
+        legacy["gb_nums"] = legacy["gb_nums"].replace({r"\(0": "", r"\)": "", r"\ ": ""}, regex=True)
         legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: str(x))
-        legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: x[0:5] + " " + x[5:12])
-        len_check = legacy[legacy["gb_nums"].apply(lambda x: len(x) == 10)].index
-        legacy["gb_nums"] = legacy["gb_nums"].drop(len_check)
-        legacy.loc[legacy["country"] == "GB", "phone_number"] = legacy["gb_nums"]
+        legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: x.replace("0", "+44", 1) if x.startswith("0", 0, 1) else x)
+        legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
         
 
+        # UK phone number regex-matched data cleaning 
+        legacy["gb_nums_reg"] = legacy_gb["phone_number"].loc[legacy_gb["phone_number"].str.match(gb_phone_regex)]
+        legacy["gb_nums_reg"] = legacy["gb_nums_reg"].replace({r"\(0": "+44", r"\)": "", r"\ ": ""}, regex=True)
+        legacy["gb_nums_reg"] = legacy["gb_nums_reg"].apply(lambda x: str(x))
+        legacy["gb_nums_reg"] = legacy["gb_nums_reg"].apply(lambda x: x.replace("0", "+44", 1) if x.startswith("0", 0, 1) else x)
+        legacy["gb_nums_reg"] = legacy["gb_nums_reg"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
+        
+        # DE number non regex-matched data cleaning
         de_phone_regex = "^(\+49|0)(\d{2,4})?(\s?\d{3,4}){1,3}$"
         de_mask = legacy["country"].isin(["DE"])
         legacy_de = legacy[de_mask]
         legacy["de_nums"] = legacy_de["phone_number"].loc[~legacy_de["phone_number"].str.match(de_phone_regex)]
-        legacy["de_nums"] = legacy["de_nums"].replace({r"\+49": "", r"\)": "", r"\(0": "", r"\ ": ""}, regex=True)
+        legacy["de_nums"] = legacy["de_nums"].replace({r"\)": "", r"\(0": "", r"\ ": ""}, regex=True)
         legacy["de_nums"] = legacy["de_nums"].apply(lambda x: str(x))
-        legacy["de_nums"] = legacy["de_nums"].apply(lambda x: x[0:5] + " " + x[5:11])
+        legacy["de_nums"] = legacy["de_nums"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
         len_check = legacy[legacy["de_nums"].apply(lambda x: len(x) == 10)].index
-        legacy["gb_nums"] = legacy["de_nums"].drop(len_check)
-        legacy.loc[legacy["country"] == "DE", "phone_number"] = legacy["de_nums"]
+        
+
+        # DE phone number regex-matched data cleaning
+        legacy["de_nums_reg"] = legacy_de["phone_number"].loc[legacy_de["phone_number"].str.match(de_phone_regex)]
+        legacy["de_nums_reg"] = legacy["de_nums_reg"].apply(lambda x: str(x))
+        legacy["de_nums_reg"] = legacy["de_nums_reg"].apply(lambda x: x.replace("0", "+49", 1) if x.startswith("0", 0, 1) else x)
+        legacy["de_nums_reg"] = legacy["de_nums_reg"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
+        legacy["de_nums_reg"] = legacy["de_nums_reg"].replace("  ", " ", regex=True)
+        
+        
+        
+        legacy["phone_number"] = legacy["gb_nums"] + legacy["gb_nums_reg"] + legacy["de_nums"] + legacy["de_nums_reg"]
+        legacy["phone_number"] = legacy["phone_number"].replace("nan", "", regex=True).str.rstrip()
+        
+
         
         
 
