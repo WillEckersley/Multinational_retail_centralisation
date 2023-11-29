@@ -87,7 +87,9 @@ class DataCleaner:
         # Reindex resultant dataframe.
         legacy = legacy.reset_index(drop=True)
         legacy = legacy.drop(["index"], axis="columns")
-        legacy = legacy.reset_index()
-        return legacy     
-    
-x = DataCleaner()
+        return legacy   
+
+      
+dim_users = DataCleaner()
+dim_users = dim_users.clean_user_data()
+dbu.DatabaseConnector().upload_to_db(dim_users, "dim_users") 
