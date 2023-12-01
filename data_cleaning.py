@@ -114,5 +114,23 @@ class DataCleaner:
         card_data["card_number"] = card_data["card_number"].apply(lambda x: str(x))
         card_data = card_data[card_data["card_number"].apply(lambda x: x.isnumeric())]
 
+        # Check card numbers with length of 15 digits have correct length.
+        fifteen_data = card_data[card_data["card_provider"].isin(["JCB 15 digit", "American Express"])]
+        card_data["fifteen"] = fifteen_data["card_number"]
+        card_data["fifteen"] = card_data["fifteen"].apply(lambda x : str(x))
+        card_data["fifteen"] = card_data["fifteen"][card_data["fifteen"].apply(lambda x: len(x) == 15)]
+        
+        # Check card numbers with length of 16 digits have correct length.
+        sixteen_data = card_data[card_data["card_provider"].isin(["VISA 16 digit", "JCB 16 digit", "Discover", "Mastercard"])]
+        card_data["sixteen"] = sixteen_data["card_number"]
+        card_data["sixteen"] = card_data["sixteen"].apply(lambda x : str(x))
+        card_data["sixteen"] = card_data["sixteen"][card_data["sixteen"].apply(lambda x: len(x) == 16)]
+
+        # Check card numbers with length of 19 digits
+        nineteen_data = card_data[card_data["card_provider"].isin(["VISA 19 digit"])]
+        card_data["nineteen"] = nineteen_data["card_number"]
+        card_data["nineteen"] = card_data["nineteen"].apply(lambda x : str(x))
+        card_data["nineteen"] = card_data["nineteen"][card_data["nineteen"].apply(lambda x: len(x) == 19)]
+
 x = DataCleaner()
 x.clean_card_data()
