@@ -42,11 +42,14 @@ class DataCleaner:
         legacy_gb = legacy[gb_mask]
         legacy["gb_nums"] = legacy_gb["phone_number"]
         
-        # Reformat UK phone numbers
+        # Reformat UK phone numbers. 
         legacy["gb_nums"] = legacy["gb_nums"].replace({r"\(0": "", r"\)": "", r"\ ": ""}, regex=True)
         legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: str(x))
         legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: x.replace("0", "+44", 1) if x.startswith("0", 0, 1) else x)
         legacy["gb_nums"] = legacy["gb_nums"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
+
+        # Remove entries of incorrect length
+        legacy = legacy[legacy["gb_nums"].str.len() <= 15]
                                                             
         # Create sepearte column to clean only German phone numbers. 
         de_mask = legacy["country"].isin(["DE"])
@@ -59,6 +62,9 @@ class DataCleaner:
         legacy["de_nums"] = legacy["de_nums"].apply(lambda x: x.replace("0", "+49", 1) if x.startswith("0", 0, 1) else x)
         legacy["de_nums"] = legacy["de_nums"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
 
+        # Remove entries of incorrect length
+        legacy = legacy[legacy["de_nums"].str.len() <= 14]
+
         #Create seperate column to clean only US phone numbers.
         us_mask = legacy["country"].isin(["US"])
         legacy_us = legacy[us_mask]
@@ -70,7 +76,10 @@ class DataCleaner:
         legacy["us_nums"] = legacy["us_nums"].apply(lambda x: "+1" + x if not x.startswith("+1", 0, 2) else x)
         legacy["us_nums"] = legacy["us_nums"].apply(lambda x: x[0:2] + " " + x[2:5] + " " + x[5:])
         legacy["us_nums"] = legacy["us_nums"].replace("x", " ", regex=True)
-        legacy["us_nums"] = legacy["us_nums"].apply(lambda x: x.replace("+1 nan", ""))
+        legacy["us_nums"] = legacy["us_nums"].apply(lambda x: x.replace("+1 nan", ""))\
+        
+        # Remove entries of incorrect length
+        legacy = legacy[legacy["us_nums"].str.len() <= 15]
         
         # Concaternate and clean phone number column.
         legacy["phone_number"] = legacy["gb_nums"] + legacy["de_nums"] + legacy["us_nums"]
@@ -79,7 +88,6 @@ class DataCleaner:
         legacy["phone_number"] = legacy["phone_number"].apply(lambda x: x.replace("nan", ""))
         legacy["phone_number"] = legacy["phone_number"].apply(lambda x: x.rstrip())
         legacy = legacy[legacy["phone_number"].str.startswith("+")]
-        legacy = legacy[legacy["phone_number"].str.len() <= 15]
 
         # Drop phone number columns used in formatting stages.
         legacy = legacy.drop(["gb_nums", "de_nums", "us_nums"], axis="columns")
@@ -88,8 +96,10 @@ class DataCleaner:
         legacy = legacy.reset_index(drop=True)
         legacy = legacy.drop(["index"], axis="columns")
         return legacy   
+    
+    def clean_card_data(self):
+        card_data = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
+        print(card_data)
 
-      
-dim_users = DataCleaner()
-dim_users = dim_users.clean_user_data()
-dbu.DatabaseConnector().upload_to_db(dim_users, "dim_users") 
+x = DataCleaner()
+x.clean_card_data()
