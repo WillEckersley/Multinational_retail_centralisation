@@ -98,17 +98,21 @@ class DataCleaner:
         return legacy   
     
     def clean_card_data(self):
-        # Extract data from remote pdf document.
+        # Extract data from remote pdf document in list format, concaternate into single dataframe and reindex.
         card_dfs = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
         card_data = pd.concat(card_dfs)
+        card_data = card_data.reset_index(drop=True)
         
         # Remove erroneous values from card_provider column.
         card_data = card_data[~card_data["card_provider"].isin(["NULL", "OGJTXI6X1H", "BU9U947ZGV", "UA07L7EILH", "XGZBYBYGUW", "DLWF2HANZF", "1M38DYQTZV", "WJVMUO4QX6", "DE488ORDXY", "5CJH7ABGDR", "JCQMU8FN85", "TS8A81WFXV", "JRPRLPIBZ2", "NB71VBAHJE", "5MFWFBZRM9"])]
-        display(card_data.columns)
 
         # Convert date_payment_confirmed to datetime64 format and remove 8 NaT values.
         card_data["date_payment_confirmed"] = pd.to_datetime(card_data["date_payment_confirmed"], errors="coerce", format="%Y-%m-%d")
         card_data = card_data.dropna()
+
+        # Clean card_number column: removing any strings with non-numeric values, 
+        card_data["card_number"] = card_data["card_number"].apply(lambda x: str(x))
+        card_data = card_data[card_data["card_number"].apply(lambda x: x.isnumeric())]
 
 x = DataCleaner()
 x.clean_card_data()
