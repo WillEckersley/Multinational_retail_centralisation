@@ -98,8 +98,17 @@ class DataCleaner:
         return legacy   
     
     def clean_card_data(self):
-        card_data = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
-        print(card_data)
+        # Extract data from remote pdf document.
+        card_dfs = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
+        card_data = pd.concat(card_dfs)
+        
+        # Remove erroneous values from card_provider column.
+        card_data = card_data[~card_data["card_provider"].isin(["NULL", "OGJTXI6X1H", "BU9U947ZGV", "UA07L7EILH", "XGZBYBYGUW", "DLWF2HANZF", "1M38DYQTZV", "WJVMUO4QX6", "DE488ORDXY", "5CJH7ABGDR", "JCQMU8FN85", "TS8A81WFXV", "JRPRLPIBZ2", "NB71VBAHJE", "5MFWFBZRM9"])]
+        display(card_data.columns)
+
+        # Convert date_payment_confirmed to datetime64 format and remove 8 NaT values.
+        card_data["date_payment_confirmed"] = pd.to_datetime(card_data["date_payment_confirmed"], errors="coerce", format="%Y-%m-%d")
+        card_data = card_data.dropna()
 
 x = DataCleaner()
 x.clean_card_data()
