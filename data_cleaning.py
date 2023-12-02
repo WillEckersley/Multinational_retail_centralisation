@@ -21,7 +21,7 @@ class DataCleaner:
         legacy["country_code"] = legacy["country_code"].replace("GGB", "GB")
 
         # Drop 'country' in favour of 'country code' as columns repeat information with code column less prone to errors in data entry.
-        # Rename 'country_code' to 'country for simplicity.                                 
+        # Rename 'country_code' to 'country' for simplicity.                                 
         legacy = legacy.drop(["country"], axis="columns")                                                      
         legacy = legacy.rename(columns={"country_code": "country"})  
 
@@ -76,7 +76,7 @@ class DataCleaner:
         legacy["us_nums"] = legacy["us_nums"].apply(lambda x: "+1" + x if not x.startswith("+1", 0, 2) else x)
         legacy["us_nums"] = legacy["us_nums"].apply(lambda x: x[0:2] + " " + x[2:5] + " " + x[5:])
         legacy["us_nums"] = legacy["us_nums"].replace("x", " ", regex=True)
-        legacy["us_nums"] = legacy["us_nums"].apply(lambda x: x.replace("+1 nan", ""))\
+        legacy["us_nums"] = legacy["us_nums"].apply(lambda x: x.replace("+1 nan", ""))
         
         # Remove entries of incorrect length
         legacy = legacy[legacy["us_nums"].str.len() <= 15]
@@ -98,39 +98,54 @@ class DataCleaner:
         return legacy   
     
     def clean_card_data(self):
-        # Extract data from remote pdf document in list format, concaternate into single dataframe and reindex.
+        # Extract data from remote pdf document and concaternate into one dataframe.
         card_dfs = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
         card_data = pd.concat(card_dfs)
+
+        # Reset index of dataframe.
         card_data = card_data.reset_index(drop=True)
         
-        # Remove erroneous values from card_provider column.
-        card_data = card_data[~card_data["card_provider"].isin(["NULL", "OGJTXI6X1H", "BU9U947ZGV", "UA07L7EILH", "XGZBYBYGUW", "DLWF2HANZF", "1M38DYQTZV", "WJVMUO4QX6", "DE488ORDXY", "5CJH7ABGDR", "JCQMU8FN85", "TS8A81WFXV", "JRPRLPIBZ2", "NB71VBAHJE", "5MFWFBZRM9"])]
+        # Group by provider to filter card numbers of incorrect length by provider
+        groups = card_data.groupby("card_provider")
 
-        # Convert date_payment_confirmed to datetime64 format and remove 8 NaT values.
-        card_data["date_payment_confirmed"] = pd.to_datetime(card_data["date_payment_confirmed"], errors="coerce", format="%Y-%m-%d")
-        card_data = card_data.dropna()
+        # Filter each group by target length
+        thirteen = groups.get_group("VISA 13 digit") 
+        filtered = thirteen.loc[thirteen["card_number"].apply(lambda x: len(str(x)) == 13), "card_number"]
+        thirteen["card_number"] = filtered
+    
+        fourteen = pd.concat([groups.get_group("Diners Club / Carte Blanche"), groups.get_group("Maestro")])
+        filtered = fourteen.loc[fourteen["card_number"].apply(lambda x: len(str(x)) == 14), "card_number"]
+        fourteen["card_number"] = filtered
 
-        # Clean card_number column: removing any strings with non-numeric values, 
-        card_data["card_number"] = card_data["card_number"].apply(lambda x: str(x))
-        card_data = card_data[card_data["card_number"].apply(lambda x: x.isnumeric())]
-
-        # Check card numbers with length of 15 digits have correct length.
-        fifteen_data = card_data[card_data["card_provider"].isin(["JCB 15 digit", "American Express"])]
-        card_data["fifteen"] = fifteen_data["card_number"]
-        card_data["fifteen"] = card_data["fifteen"].apply(lambda x : str(x))
-        card_data["fifteen"] = card_data["fifteen"][card_data["fifteen"].apply(lambda x: len(x) == 15)]
+        fifteen = pd.concat([groups.get_group("American Express"), groups.get_group("JCB 15 digit")]) 
+        filtered = fifteen.loc[fifteen["card_number"].apply(lambda x: len(str(x)) == 15), "card_number"]
+        fifteen["card_number"] = filtered
         
-        # Check card numbers with length of 16 digits have correct length.
-        sixteen_data = card_data[card_data["card_provider"].isin(["VISA 16 digit", "JCB 16 digit", "Discover", "Mastercard"])]
-        card_data["sixteen"] = sixteen_data["card_number"]
-        card_data["sixteen"] = card_data["sixteen"].apply(lambda x : str(x))
-        card_data["sixteen"] = card_data["sixteen"][card_data["sixteen"].apply(lambda x: len(x) == 16)]
+        sixteen = pd.concat([groups.get_group("Discover"), groups.get_group("JCB 16 digit"), groups.get_group("Mastercard"), groups.get_group("VISA 16 digit")])
+        filtered = sixteen.loc[sixteen["card_number"].apply(lambda x: len(str(x)) == 16), "card_number"]
+        sixteen["card_number"] = filtered 
+        
+        nineteen = groups.get_group("VISA 19 digit") 
+        filtered = nineteen.loc[nineteen["card_number"].apply(lambda x: len(str(x)) == 19), "card_number"]
+        nineteen["card_number"] = filtered
 
-        # Check card numbers with length of 19 digits
-        nineteen_data = card_data[card_data["card_provider"].isin(["VISA 19 digit"])]
-        card_data["nineteen"] = nineteen_data["card_number"]
-        card_data["nineteen"] = card_data["nineteen"].apply(lambda x : str(x))
-        card_data["nineteen"] = card_data["nineteen"][card_data["nineteen"].apply(lambda x: len(x) == 19)]
+        # Concaternate filtered dataframes and reset index .
+        concaternated = pd.concat([thirteen, fourteen, fifteen, sixteen, nineteen])
+        card_data = concaternated
+        card_data = card_data.reset_index(drop=True)
+
+        # Clean card_number column: removing any strings with non-numeric values.
+        card_data["card_number"] = card_data["card_number"].apply(lambda x: str(x))
+        card_data["card_number"] = card_data.loc[card_data["card_number"].apply(lambda x: x.isnumeric()), "card_number"]
+        
+        # Convert date_payment_confirmed to datetime64 format.
+        card_data["date_payment_confirmed"] = pd.to_datetime(card_data["date_payment_confirmed"], errors="coerce", format="%Y-%m-%d")
+        
+        #Drop 2000 or so null values
+        card_data = card_data.dropna()
+    
+        return card_data
+        
 
 x = DataCleaner()
 x.clean_card_data()
