@@ -7,11 +7,11 @@ import json
 
 from sqlalchemy import text
 
-store_endpoint = "https://aqj7u5id95.execute-api.eu-west-1.amazonaws.com/prod/store_details/"
-number_endpoint = "https://aqj7u5id95.execute-api.eu-west-1.amazonaws.com/prod/number_stores/"
-key = "/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/api_key.json"
-
 class DataExtractor:
+
+    store_endpoint = "https://aqj7u5id95.execute-api.eu-west-1.amazonaws.com/prod/store_details/"
+    number_endpoint = "https://aqj7u5id95.execute-api.eu-west-1.amazonaws.com/prod/number_stores/"
+    key = "/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/api_key.json"
 
     def list_db_tables(self, engine):
         with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
@@ -39,10 +39,5 @@ class DataExtractor:
     def retrieve_stores_data(self, endpoint, header):
         with open(header, "r") as f:
             api = json.load(f)
-            response = [requests.get(endpoint + str(num), headers=api).json() for num in range(0, 451)]
-            store_names = pd.DataFrame(response)
-            return store_names
-         
-
-x = DataExtractor()
-x.retrieve_stores_data(store_endpoint, key)
+            response_list = [requests.get(endpoint + str(num), headers=api).json() for num in range(0, 451)]
+            return response_list
