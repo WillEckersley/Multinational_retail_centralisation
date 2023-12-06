@@ -3,7 +3,7 @@ import data_extraction as dex
 import database_utils as dbu
 
 from datetime import datetime
-
+from dateutil.parser import parse
 
 class DataCleaner:
 
@@ -141,11 +141,48 @@ class DataCleaner:
         # Convert date_payment_confirmed to datetime64 format.
         card_data["date_payment_confirmed"] = pd.to_datetime(card_data["date_payment_confirmed"], errors="coerce", format="%Y-%m-%d")
         
-        #Drop 2000 or so null values
+        #Drop ~2000 null values.
         card_data = card_data.dropna()
     
         return card_data
-        
+    
+    def clean_store_data(self):
 
-x = DataCleaner()
-x.clean_card_data()
+        # Import store data into function and store in a dataframe.
+        store_data = dex.DataExtractor().retrieve_stores_data(dex.DataExtractor().store_endpoint, dex.DataExtractor().key)
+        store_data = pd.DataFrame(store_data)
+
+        # Drop redundant columns. 
+        # 'lat' is largely NaN values and repeats any data that is already stored in 'latitude'.
+        # 'latitude' and 'longitude' are redundant when address and storecode identifiers are already present. 
+        # Second, latitude and longitude data are unnecessarilly precise for this dataset's purposes.
+        # 'continent' may have been useful for aggregations but given that only three countries accross 
+        # two continents are represented, it makes more sense to aggregate over these in combination where necessary.
+        store_data.drop(["continent", "latitude", "lat", "longitude"], axis="columns", inplace=True)
+
+        # Replace '\n' seperators in address column with commas.
+        store_data["address"] = store_data["address"].str.split("\\n")
+        store_data["address"] = store_data["address"].apply(lambda x: ", ".join(x))
+
+        # Rename country code to country and remove erroneous values.
+        store_data.loc[~store_data["country_code"].isin(["GB", "DE", "US"]), "country_code"] = np.nan
+        store_data.dropna(inplace=True)
+        store_data.rename(columns={"country_code": "country"}, inplace=True)
+
+        # Remove erroneous alphabetical characters from staff number values and return dtype to int.
+        store_data["staff_numbers"] = store_data["staff_numbers"].apply(lambda x: x if x.isnumeric() else x.replace("".join(filter(str.isalpha, x)), ""))
+        store_data["staff_numbers"] = store_data["staff_numbers"].astype("int")
+
+        # Apply formatting to opening date column.
+        store_data["opening_date"] = store_data["opening_date"].apply(parse)
+        store_data["opening_date"] = pd.to_datetime(store_data["opening_date"], errors="coerce")
+
+        # Handle the address and locality entries for the online store. 
+        store_data.loc[0, "address"] = "Online"
+        store_data.loc[0, "locality"] = "Online"
+
+        # Drop 'index' column and reset index. 
+        store_data.drop(columns=["index"], inplace=True)
+        store_data.reset_index(inplace=True)
+
+        return store_data
