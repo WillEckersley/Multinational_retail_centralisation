@@ -4,6 +4,7 @@ import sqlalchemy
 import tabula
 import requests
 import json
+import boto3
 
 from sqlalchemy import text
 
@@ -12,6 +13,7 @@ class DataExtractor:
     store_endpoint = "https://aqj7u5id95.execute-api.eu-west-1.amazonaws.com/prod/store_details/"
     number_endpoint = "https://aqj7u5id95.execute-api.eu-west-1.amazonaws.com/prod/number_stores/"
     key = "/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/api_key.json"
+    s3_loc = "data-handling-public"
 
     def list_db_tables(self, engine):
         with engine.execution_options(isolation_level="AUTOCOMMIT").connect() as connection:
@@ -41,3 +43,8 @@ class DataExtractor:
             api = json.load(f)
             response_list = [requests.get(endpoint + str(num), headers=api).json() for num in range(0, 451)]
             return response_list
+        
+    def extract_from_s3(self, endpoint):
+        client = boto3.client("s3")
+        download = client.download_file(endpoint, "products.csv", "/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/productscsv.csv")
+        return download
