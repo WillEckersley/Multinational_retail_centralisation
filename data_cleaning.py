@@ -159,7 +159,7 @@ class DataCleaner:
         # 'latitude' and 'longitude' are redundant when address and storecode identifiers are already present. 
         # Second, latitude and longitude data are unnecessarilly precise for this dataset's purposes.
         # 'continent' may have been useful for aggregations but given that only three countries accross 
-        # two continents are represented, it makes more sense to aggregate over these in combination where necessary.
+        # two continents are represented, it makes more sense to aggregate over these in future analyses.
         store_data.drop(["continent", "latitude", "lat", "longitude"], axis="columns", inplace=True)
 
         # Replace '\n' seperators in address column with commas.
@@ -248,3 +248,16 @@ class DataCleaner:
         products.reset_index(drop=True, inplace=True)
         
         return products
+    
+    def clean_orders_table(self):
+        # Extract orders table. 
+        orders = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "orders_table")
+
+        # Drop unneeded columns and set 'card_number' to object dtype. 
+        orders.drop(columns=["level_0", "index", "first_name", "last_name", "1"], inplace=True)
+        orders["card_number"] = orders["card_number"].apply(lambda x: str(x))
+        
+        return orders
+
+x = DataCleaner()
+x.clean_orders_table()
