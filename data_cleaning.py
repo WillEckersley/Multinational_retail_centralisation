@@ -57,7 +57,7 @@ class DataCleaner:
         # Replace mistaken instances of '@@' with '@' in email_address column.                                                                           
         legacy["email_address"] = legacy["email_address"].str.replace("@@", "@") 
 
-        # Drop NaN values, reset index and drop serperate index column 
+        # Drop NaN values, reset index and drop serperate index column. 
         legacy.dropna(inplace=True)
         legacy.reset_index(drop=True, inplace=True)
         legacy.drop(columns="index", inplace=True)
@@ -155,16 +155,19 @@ class DataCleaner:
         return store_data
     
     def convert_product_weights(self):
+        # Read .csv into dataframe
         csv_read = pd.read_csv("/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/productscsv.csv")
         products = pd.DataFrame(csv_read)
         
+        # Convert dtype of 'weight' column to perform manipulations.
         products["weight"] = products["weight"].astype("str")
 
+        # Create seperate 'kg', 'non_kg' and 'x' columns and handle formatting of entries. 
         products["kg"] = products.loc[products["weight"].apply(lambda x: x.endswith("kg")), "weight"]
         products["kg"] = products["kg"].astype("str")
         products["kg"] = products["kg"].str.replace("kg", "")
         products["kg"] = products["kg"].str.replace("nan", "")
-        
+    
         products["non_kg"] = products.loc[products["weight"].apply(lambda x: not x.endswith("kg") and not "x" in x and x.endswith("g") or x.endswith("l")), "weight"]
         products["non_kg"] = products["non_kg"].str.replace("g", "")
         products["non_kg"] = products["non_kg"].str.replace("ml", "")
@@ -177,14 +180,15 @@ class DataCleaner:
         products["x"] = products["x"].apply(lambda x: float(re.findall(r"\d+", x)[0]) * float(re.findall(r"\d+", x)[1]) /1000 if "x" in x else x)
         products["x"] = products["x"].astype("str")
         products["x"] = products["x"].replace("nan", "")
-        
+
+        # Concaternate filtered columns and perform reformatting.         
         products["weight"] = products["x"] + products["non_kg"] + products["kg"]
         products.drop(columns=["x", "kg", "non_kg"], inplace=True)
         products.loc[products["weight"].isin([""]), "weight"] = np.nan
         products.dropna(inplace=True)
         products["weight"] = products["weight"].apply(lambda x: round(float(x), 4))
         products["weight"] = products["weight"].astype("float")
-        products.rename(columns={"weight": "weight (kg)"}, inplace=True)
+        products.rename(columns={"weight": "product_weight (kg)"}, inplace=True)
         
         return products
     
@@ -208,7 +212,7 @@ class DataCleaner:
         products["category"] = products["category"].str.replace("-", " ")
 
         # Rename/drop columns for clarity; reset index.
-        products.rename(columns={"removed": "available", "product_price": "product_price (£)", "category": "product_category", "weight (kg)": "product_weight (kg)"}, inplace=True)
+        products.rename(columns={"removed": "available", "product_price": "product_price (£)", "category": "product_category"}, inplace=True)
         products.drop(columns="Unnamed: 0", inplace=True)
         products.reset_index(drop=True, inplace=True)
         
