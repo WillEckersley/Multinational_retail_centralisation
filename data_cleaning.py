@@ -200,7 +200,6 @@ class DataCleaner:
         products["kg"] = products["kg"].str.replace("kg", "")
         products["kg"] = products["kg"].str.replace("nan", "")
         
-
         products["non_kg"] = products.loc[products["weight"].apply(lambda x: not x.endswith("kg") and not "x" in x and x.endswith("g") or x.endswith("l")), "weight"]
         products["non_kg"] = products["non_kg"].str.replace("g", "")
         products["non_kg"] = products["non_kg"].str.replace("ml", "")
@@ -208,7 +207,6 @@ class DataCleaner:
         products["non_kg"] = products["non_kg"].astype("str")
         products["non_kg"] = products["non_kg"].str.replace("nan", "")
         
-
         products["x"] = products.loc[products["weight"].apply(lambda x: "x" in x), "weight"]
         products["x"] = products["x"].astype("str")
         products["x"] = products["x"].apply(lambda x: float(re.findall(r"\d+", x)[0]) * float(re.findall(r"\d+", x)[1]) /1000 if "x" in x else x)
@@ -222,5 +220,31 @@ class DataCleaner:
         products["weight"] = products["weight"].apply(lambda x: round(float(x), 4))
         products["weight"] = products["weight"].astype("float")
         products.rename(columns={"weight": "weight (kg)"}, inplace=True)
+        
+        return products
+    
+    def clean_products_data(self):
+        # Import dataframe with cleaned weight column 
+        products = DataCleaner().convert_product_weights()
+
+        # Convert column to boolean for readability and error reduction.
+        # Lower down: reverse naming for comprehension/readability.
+        boolean_map = {"Still_avaliable": True, "Removed": False}
+        products["removed"] = products["removed"].map(boolean_map)
+        
+        # Parse dates stated in erroneious format and convert dtype to datetime64.
+        products["date_added"] = products["date_added"].apply(parse)
+
+        # Remove '£' symbol from prices and convert dtype to float to allow arithmetical manipulations.
+        products["product_price"] = products["product_price"].apply(lambda x: x.replace("£", "") if x.startswith("£") else x)
+        products["product_price"] = products["product_price"].astype("float")
+        
+        # Remove unnecessary '-' separators from values in 'category' column.
+        products["category"] = products["category"].str.replace("-", " ")
+
+        # Rename/drop columns for clarity; reset index.
+        products.rename(columns={"removed": "available", "product_price": "product_price (£)", "category": "product_category", "weight (kg)": "product_weight (kg)"}, inplace=True)
+        products.drop(columns="Unnamed: 0", inplace=True)
+        products.reset_index(drop=True, inplace=True)
         
         return products
