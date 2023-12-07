@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import re
+import json
 import data_extraction as dex
 import database_utils as dbu
 
@@ -258,6 +259,27 @@ class DataCleaner:
         orders["card_number"] = orders["card_number"].apply(lambda x: str(x))
         
         return orders
+    
+    def clean_purchase_dates(self):
+        dates_json = pd.read_json("/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/datedetails.json")
+        dates = pd.DataFrame(dates_json)
+        
+        # Remove erroneous values from columns.
+        dates.loc[~dates["day"].apply(lambda x: x.isnumeric()), "day"] = np.nan
+        dates.dropna(inplace=True)
+        
+        # Apply formatting to day and month columns and concaternate with timestsamp column in new datetime column.
+        dates["day"] = dates["day"].apply(lambda x: str(x) + "-")
+        dates["month"] = dates["month"].apply(lambda x: str(x) + "-")
+        dates["purchase_datetime"] = dates["day"] + dates["month"] + dates["year"] + " " + dates["timestamp"]
+        
+        # Datetime parse to correct minor errors and convert to datetime format.
+        dates["purchase_datetime"] = dates["purchase_datetime"].apply(parse)
+
+        # Drop original columns. 
+        dates.drop(columns=["time_period", "month", "day", "year", "timestamp"], inplace=True)
+       
+        return dates
 
 x = DataCleaner()
 x.clean_orders_table()
