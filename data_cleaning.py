@@ -1,4 +1,6 @@
 import pandas as pd
+import numpy as np
+import re
 import data_extraction as dex
 import database_utils as dbu
 
@@ -186,3 +188,39 @@ class DataCleaner:
         store_data.reset_index(inplace=True)
 
         return store_data
+    
+    def convert_product_weights(self):
+        csv_read = pd.read_csv("/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/productscsv.csv")
+        products = pd.DataFrame(csv_read)
+        
+        products["weight"] = products["weight"].astype("str")
+
+        products["kg"] = products.loc[products["weight"].apply(lambda x: x.endswith("kg")), "weight"]
+        products["kg"] = products["kg"].astype("str")
+        products["kg"] = products["kg"].str.replace("kg", "")
+        products["kg"] = products["kg"].str.replace("nan", "")
+        
+
+        products["non_kg"] = products.loc[products["weight"].apply(lambda x: not x.endswith("kg") and not "x" in x and x.endswith("g") or x.endswith("l")), "weight"]
+        products["non_kg"] = products["non_kg"].str.replace("g", "")
+        products["non_kg"] = products["non_kg"].str.replace("ml", "")
+        products["non_kg"] = products["non_kg"].apply(lambda x: float(x) / 1000)
+        products["non_kg"] = products["non_kg"].astype("str")
+        products["non_kg"] = products["non_kg"].str.replace("nan", "")
+        
+
+        products["x"] = products.loc[products["weight"].apply(lambda x: "x" in x), "weight"]
+        products["x"] = products["x"].astype("str")
+        products["x"] = products["x"].apply(lambda x: float(re.findall(r"\d+", x)[0]) * float(re.findall(r"\d+", x)[1]) /1000 if "x" in x else x)
+        products["x"] = products["x"].astype("str")
+        products["x"] = products["x"].replace("nan", "")
+        
+        products["weight"] = products["x"] + products["non_kg"] + products["kg"]
+        products.drop(columns=["x", "kg", "non_kg"], inplace=True)
+        products.loc[products["weight"].isin([""]), "weight"] = np.nan
+        products.dropna(inplace=True)
+        products["weight"] = products["weight"].apply(lambda x: round(float(x), 4))
+        products["weight"] = products["weight"].astype("float")
+        products.rename(columns={"weight": "weight (kg)"}, inplace=True)
+        
+        return products
