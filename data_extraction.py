@@ -1,13 +1,13 @@
 from sqlalchemy import text
 
 
-import pandas as pd
+import boto3
 import database_utils as dbu
+import json
+import pandas as pd
+import requests
 import sqlalchemy
 import tabula
-import requests
-import json
-import boto3
 
 
 class DataExtractor:
