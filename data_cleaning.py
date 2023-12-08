@@ -1,18 +1,28 @@
-import pandas as pd
-import numpy as np
-import re
-import json
+from dateutil.parser import parse
+from numpy import numpy.nan
+
+
 import data_extraction as dex
 import database_utils as dbu
+import pandas as pd
+import re
 
-from datetime import datetime
-from dateutil.parser import parse
 
 class DataCleaner:
 
+
     engine = dbu.DatabaseConnector().init_db_engine()
 
+
     def clean_user_data(self):
+        """Cleans data extracted from a database stored in AWS RDS. 
+
+        Args:
+            None.
+
+        Returns:
+            A cleaned dataframe. See code comments for details of process.    
+        """
         # Read the dataframe into the program. 
         legacy = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "legacy_users")
 
@@ -64,18 +74,27 @@ class DataCleaner:
         
         return legacy   
     
+    
     def clean_card_data(self):
+        """Cleans credit card data stored in a pdf document in an AWS S3 bucket.
+
+        Args:
+            None.
+
+        Returns:
+            A cleaned dataframe. See code comments for details of process.
+        """
         # Extract data from remote pdf document and concaternate into one dataframe.
         card_dfs = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
         card_data = pd.concat(card_dfs)
 
         # Reset index of dataframe.
-        card_data = card_data.reset_index(drop=True)
+        card_data.reset_index(drop=True, inplace=True)
         
-        # Group by provider to filter card numbers of incorrect length by provider
+        # Group by provider to filter card numbers of incorrect length by provider.
         groups = card_data.groupby("card_provider")
 
-        # Filter each group by target length
+        # Filter each group by target length.
         thirteen = groups.get_group("VISA 13 digit") 
         filtered = thirteen.loc[thirteen["card_number"].apply(lambda x: len(str(x)) == 13), "card_number"]
         thirteen["card_number"] = filtered
@@ -96,10 +115,10 @@ class DataCleaner:
         filtered = nineteen.loc[nineteen["card_number"].apply(lambda x: len(str(x)) == 19), "card_number"]
         nineteen["card_number"] = filtered
 
-        # Concaternate filtered dataframes and reset index .
+        # Concaternate filtered dataframes and reset index.
         concaternated = pd.concat([thirteen, fourteen, fifteen, sixteen, nineteen])
         card_data = concaternated
-        card_data = card_data.reset_index(drop=True)
+        card_data.reset_index(drop=True, inplace=True)
 
         # Clean card_number column: removing any strings with non-numeric values.
         card_data["card_number"] = card_data["card_number"].apply(lambda x: str(x))
@@ -109,12 +128,20 @@ class DataCleaner:
         card_data["date_payment_confirmed"] = pd.to_datetime(card_data["date_payment_confirmed"], errors="coerce", format="%Y-%m-%d")
         
         #Drop ~2000 null values.
-        card_data = card_data.dropna()
+        card_data.dropna(inplace=True)
     
         return card_data
     
-    def clean_store_data(self):
 
+    def clean_store_data(self):
+        """Cleans store card data stored in an AWS API.
+
+        Args:
+            None.
+
+        Returns:
+            A cleaned dataframe. See code comments for details of process.
+        """    
         # Import store data into function and store in a dataframe.
         store_data = dex.DataExtractor().retrieve_stores_data(dex.DataExtractor().store_endpoint, dex.DataExtractor().key)
         store_data = pd.DataFrame(store_data)
@@ -132,7 +159,7 @@ class DataCleaner:
         store_data["address"] = store_data["address"].apply(lambda x: ", ".join(x))
 
         # Rename country code to country and remove erroneous values.
-        store_data.loc[~store_data["country_code"].isin(["GB", "DE", "US"]), "country_code"] = np.nan
+        store_data.loc[~store_data["country_code"].isin(["GB", "DE", "US"]), "country_code"] = numpy.nan
         store_data.dropna(inplace=True)
         store_data.rename(columns={"country_code": "country"}, inplace=True)
 
@@ -154,7 +181,18 @@ class DataCleaner:
 
         return store_data
     
+
     def convert_product_weights(self):
+        """Handles the conversion of the weights of products originally stored in a .csv file in an AWS bucket.
+
+        Args:
+            None.
+
+        Returns:
+            A partially cleaned dataframe. See code comments for details of process. This dataframe is specifically 
+            designed to be imported and further cleaned in the function below this one in the current codebase 
+            (clean_products_data). 
+        """
         # Read .csv into dataframe
         csv_read = pd.read_csv("/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/productscsv.csv")
         products = pd.DataFrame(csv_read)
@@ -184,7 +222,7 @@ class DataCleaner:
         # Concaternate filtered columns and perform reformatting.         
         products["weight"] = products["x"] + products["non_kg"] + products["kg"]
         products.drop(columns=["x", "kg", "non_kg"], inplace=True)
-        products.loc[products["weight"].isin([""]), "weight"] = np.nan
+        products.loc[products["weight"].isin([""]), "weight"] = numpy.nan
         products.dropna(inplace=True)
         products["weight"] = products["weight"].apply(lambda x: round(float(x), 4))
         products["weight"] = products["weight"].astype("float")
@@ -192,7 +230,16 @@ class DataCleaner:
         
         return products
     
+
     def clean_products_data(self):
+        """Cleans the remaining data in the dataframe partially handled in the convert_product_weights function.
+
+        Args:
+            None.
+
+        Returns:
+            A cleaned dataframe. See code comments for details of process.
+        """
         # Import dataframe with cleaned weight column 
         products = DataCleaner().convert_product_weights()
 
@@ -218,7 +265,16 @@ class DataCleaner:
         
         return products
     
+
     def clean_orders_table(self):
+        """Cleans a dataframe of order data extracted from an AWS RDS.
+
+        Args:
+            None.
+
+        Returns:
+            A cleaned dataframe. See code comments for details of process.
+        """
         # Extract orders table. 
         orders = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "orders_table")
 
@@ -228,12 +284,21 @@ class DataCleaner:
         
         return orders
     
+
     def clean_purchase_dates(self):
+        """Cleans a dataframe of purchase times extracted from a .json file stored in AWS S3 bucket.
+
+        Args:
+            None.
+
+        Returns:
+            A cleaned dataframe. See code comments for details of process.
+        """
         dates_json = pd.read_json("/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/datedetails.json")
         dates = pd.DataFrame(dates_json)
         
         # Remove erroneous values from columns.
-        dates.loc[~dates["day"].apply(lambda x: x.isnumeric()), "day"] = np.nan
+        dates.loc[~dates["day"].apply(lambda x: x.isnumeric()), "day"] = numpy.nan
         dates.dropna(inplace=True)
         
         # Apply formatting to day and month columns and concaternate with timestsamp column in new datetime column.
