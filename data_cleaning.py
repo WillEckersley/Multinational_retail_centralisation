@@ -1,9 +1,9 @@
 from dateutil.parser import parse
-from numpy import numpy.nan
 
 
 import data_extraction as dex
 import database_utils as dbu
+import numpy as np
 import pandas as pd
 import re
 
@@ -26,8 +26,9 @@ class DataCleaner:
         # Read the dataframe into the program. 
         legacy = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "legacy_users")
 
-        legacy = legacy.drop(["country"], axis="columns")                                                      
-        legacy = legacy.rename(columns={"country_code": "country"})
+        # Drop redundant country column and rename country_code to country. 
+        legacy.drop(columns=["country"], axis="columns", inplace=True)                                                      
+        legacy.rename(columns={"country_code": "country"}, inplace=True)
 
         # Create groups for each country so that its telephone numbers can be cleaned separately according to localised formatting conventions.
         groups = legacy.groupby("country")
@@ -70,7 +71,7 @@ class DataCleaner:
         # Drop NaN values, reset index and drop serperate index column. 
         legacy.dropna(inplace=True)
         legacy.reset_index(drop=True, inplace=True)
-        legacy.drop(columns="index", inplace=True)
+        legacy.drop(columns=["index"], inplace=True)
         
         return legacy   
     
@@ -125,9 +126,9 @@ class DataCleaner:
         card_data["card_number"] = card_data.loc[card_data["card_number"].apply(lambda x: x.isnumeric()), "card_number"]
         
         # Convert date_payment_confirmed to datetime64 format.
-        card_data["date_payment_confirmed"] = pd.to_datetime(card_data["date_payment_confirmed"], errors="coerce", format="%Y-%m-%d")
+        card_data["date_payment_confirmed"] = card_data["date_payment_confirmed"].apply(parse) 
         
-        #Drop ~2000 null values.
+        #Drop null values.
         card_data.dropna(inplace=True)
     
         return card_data
@@ -143,7 +144,7 @@ class DataCleaner:
             A cleaned dataframe. See code comments for details of process.
         """    
         # Import store data into function and store in a dataframe.
-        store_data = dex.DataExtractor().retrieve_stores_data(dex.DataExtractor().store_endpoint, dex.DataExtractor().key)
+        store_data = dex.DataExtractor().retrieve_stores_data("https://aqj7u5id95.execute-api.eu-west-1.amazonaws.com/prod/store_details/", "/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/api_key.json")
         store_data = pd.DataFrame(store_data)
 
         # Drop redundant columns. 
@@ -152,24 +153,23 @@ class DataCleaner:
         # Second, latitude and longitude data are unnecessarilly precise for this dataset's purposes.
         # 'continent' may have been useful for aggregations but given that only three countries accross 
         # two continents are represented, it makes more sense to aggregate over these in future analyses.
-        store_data.drop(["continent", "latitude", "lat", "longitude"], axis="columns", inplace=True)
+        store_data.drop(columns=["continent", "latitude", "lat", "longitude"], inplace=True)
 
         # Replace '\n' seperators in address column with commas.
         store_data["address"] = store_data["address"].str.split("\\n")
         store_data["address"] = store_data["address"].apply(lambda x: ", ".join(x))
 
         # Rename country code to country and remove erroneous values.
-        store_data.loc[~store_data["country_code"].isin(["GB", "DE", "US"]), "country_code"] = numpy.nan
+        store_data.loc[~store_data["country_code"].isin(["GB", "DE", "US"]), "country_code"] = np.nan
         store_data.dropna(inplace=True)
         store_data.rename(columns={"country_code": "country"}, inplace=True)
 
-        # Remove erroneous alphabetical characters from staff number values and return dtype to int.
+        # Remove erroneous alphabetical characters from staff number values and change dtype to int.
         store_data["staff_numbers"] = store_data["staff_numbers"].apply(lambda x: x if x.isnumeric() else x.replace("".join(filter(str.isalpha, x)), ""))
         store_data["staff_numbers"] = store_data["staff_numbers"].astype("int")
 
         # Apply formatting to opening date column.
         store_data["opening_date"] = store_data["opening_date"].apply(parse)
-        store_data["opening_date"] = pd.to_datetime(store_data["opening_date"], errors="coerce")
 
         # Handle the address and locality entries for the online store. 
         store_data.loc[0, "address"] = "Online"
@@ -177,7 +177,7 @@ class DataCleaner:
 
         # Drop 'index' column and reset index. 
         store_data.drop(columns=["index"], inplace=True)
-        store_data.reset_index(inplace=True)
+        store_data.reset_index(drop=True, inplace=True)
 
         return store_data
     
@@ -222,7 +222,7 @@ class DataCleaner:
         # Concaternate filtered columns and perform reformatting.         
         products["weight"] = products["x"] + products["non_kg"] + products["kg"]
         products.drop(columns=["x", "kg", "non_kg"], inplace=True)
-        products.loc[products["weight"].isin([""]), "weight"] = numpy.nan
+        products.loc[products["weight"].isin([""]), "weight"] = np.nan
         products.dropna(inplace=True)
         products["weight"] = products["weight"].apply(lambda x: round(float(x), 4))
         products["weight"] = products["weight"].astype("float")
@@ -260,7 +260,7 @@ class DataCleaner:
 
         # Rename/drop columns for clarity; reset index.
         products.rename(columns={"removed": "available", "product_price": "product_price (£)", "category": "product_category"}, inplace=True)
-        products.drop(columns="Unnamed: 0", inplace=True)
+        products.drop(columns=["Unnamed: 0"], inplace=True)
         products.reset_index(drop=True, inplace=True)
         
         return products
@@ -298,7 +298,7 @@ class DataCleaner:
         dates = pd.DataFrame(dates_json)
         
         # Remove erroneous values from columns.
-        dates.loc[~dates["day"].apply(lambda x: x.isnumeric()), "day"] = numpy.nan
+        dates.loc[~dates["day"].apply(lambda x: x.isnumeric()), "day"] = np.nan
         dates.dropna(inplace=True)
         
         # Apply formatting to day and month columns and concaternate with timestsamp column in new datetime column.
