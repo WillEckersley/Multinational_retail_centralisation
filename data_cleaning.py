@@ -49,6 +49,9 @@ class DataCleaner:
         # details about how some of this data could be salvaged for alternative use cases. 
         legacy.drop(columns=["country", "index", "phone_number"], axis="columns", inplace=True)                                                      
         legacy.rename(columns={"country_code": "country"}, inplace=True)
+
+        # Replace erroneous instances of "GGB in country column. 
+        legacy["country"] = legacy["country"].replace("GGB", "GB")
         
         #Replace '\n' as seperators for lines in address column. Replace with commas.                                            
         legacy["address"] = legacy["address"].str.split("\\n")                                                  
@@ -83,51 +86,26 @@ class DataCleaner:
             A cleaned dataframe. See code comments for details of process.
         """
         # Extract data from remote pdf document and concaternate into one dataframe.
+        orders = DataCleaner().clean_orders_table()
         card_dfs = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
         card_data = pd.concat(card_dfs)
 
         # Reset index of dataframe.
         card_data.reset_index(drop=True, inplace=True)
-        
-        # Group by provider to filter card numbers of incorrect length by provider.
-        groups = card_data.groupby("card_provider")
-
-        # Filter each group by target length.
-        thirteen = groups.get_group("VISA 13 digit") 
-        filtered = thirteen.loc[thirteen["card_number"].apply(lambda x: len(str(x)) == 13), "card_number"]
-        thirteen["card_number"] = filtered
-    
-        fourteen = pd.concat([groups.get_group("Diners Club / Carte Blanche"), groups.get_group("Maestro")])
-        filtered = fourteen.loc[fourteen["card_number"].apply(lambda x: len(str(x)) == 14), "card_number"]
-        fourteen["card_number"] = filtered
-
-        fifteen = pd.concat([groups.get_group("American Express"), groups.get_group("JCB 15 digit")]) 
-        filtered = fifteen.loc[fifteen["card_number"].apply(lambda x: len(str(x)) == 15), "card_number"]
-        fifteen["card_number"] = filtered
-        
-        sixteen = pd.concat([groups.get_group("Discover"), groups.get_group("JCB 16 digit"), groups.get_group("Mastercard"), groups.get_group("VISA 16 digit")])
-        filtered = sixteen.loc[sixteen["card_number"].apply(lambda x: len(str(x)) == 16), "card_number"]
-        sixteen["card_number"] = filtered 
-        
-        nineteen = groups.get_group("VISA 19 digit") 
-        filtered = nineteen.loc[nineteen["card_number"].apply(lambda x: len(str(x)) == 19), "card_number"]
-        nineteen["card_number"] = filtered
-
-        # Concaternate filtered dataframes and reset index.
-        concaternated = pd.concat([thirteen, fourteen, fifteen, sixteen, nineteen])
-        card_data = concaternated
-        card_data.reset_index(drop=True, inplace=True)
 
         # Clean card_number column: removing any strings with non-numeric values.
         card_data["card_number"] = card_data["card_number"].apply(lambda x: str(x))
+        card_data["card_number"] = card_data["card_number"].apply(lambda x: x.replace("?", ""))
         card_data["card_number"] = card_data.loc[card_data["card_number"].apply(lambda x: x.isnumeric()), "card_number"]
-        
+    
+        # Merge with orders table to ensure matching in pkey and fkey during db upload phase. 
+        orders["card_number"] = orders["card_number"].astype("str")
+        merge_col = orders["card_number"].drop_duplicates()
+        card_data = pd.merge(card_data, merge_col, how="inner", on="card_number")
+
         # Convert date_payment_confirmed to datetime64 format.
         card_data["date_payment_confirmed"] = card_data["date_payment_confirmed"].apply(parse) 
-        
-        #Drop null values.
-        card_data.dropna(inplace=True)
-    
+
         return card_data
     
 
