@@ -13,6 +13,23 @@ class DataCleaner:
 
     engine = dbu.DatabaseConnector().init_db_engine()
 
+    def clean_orders_table(self):
+        """Cleans a dataframe of order data extracted from an AWS RDS.
+
+        Args:
+            None.
+
+        Returns:
+            A cleaned dataframe. See code comments for details of process.
+        """
+        # Extract orders table. 
+        orders = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "orders_table")
+
+        # Drop unneeded columns and set 'card_number' to object dtype. 
+        orders.drop(columns=["level_0", "index", "first_name", "last_name", "1"], inplace=True)
+        
+        return orders
+
 
     def clean_user_data(self):
         """Cleans data extracted from a database stored in AWS RDS. 
@@ -23,56 +40,36 @@ class DataCleaner:
         Returns:
             A cleaned dataframe. See code comments for details of process.    
         """
-        # Read the dataframe into the program. 
+        # Read the dataframes into the program. 
+        orders = DataCleaner().clean_orders_table()
         legacy = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "legacy_users")
 
-        # Drop redundant country column and rename country_code to country. 
-        legacy.drop(columns=["country"], axis="columns", inplace=True)                                                      
+        # Drop redundant country and index columns and rename country_code to country.
+        # Drop phone_number column - data corruption extremely high. See the documentation for 
+        # details about how some of this data could be salvaged for alternative use cases. 
+        legacy.drop(columns=["country", "index", "phone_number"], axis="columns", inplace=True)                                                      
         legacy.rename(columns={"country_code": "country"}, inplace=True)
-
-        # Create groups for each country so that its telephone numbers can be cleaned separately according to localised formatting conventions.
-        groups = legacy.groupby("country")
-
-        # Formatting for each country's numbers. 
-        de = groups.get_group("DE")
-        de["phone_number"] = de["phone_number"].replace({r"\)": "", r"\(0": "", r"\ ": ""}, regex=True)
-        de["phone_number"] = de["phone_number"].apply(lambda x: str(x)) # Used rather than 'astype()' becasue 'astype("str")' returned an error.
-        de["phone_number"] = de["phone_number"].apply(lambda x: x.replace("0", "+49", 1) if x.startswith("0", 0, 1) else "+49" + x if not x.startswith("+49") else x)
-        de["phone_number"] = de["phone_number"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
-        
-        gb = groups.get_group("GB")
-        gb["phone_number"] = gb["phone_number"].replace({r"\(0": "", r"\)": "", r"\ ": ""}, regex=True)
-        gb["phone_number"] = gb["phone_number"].apply(lambda x: str(x))
-        gb["phone_number"] = gb["phone_number"].apply(lambda x: x.replace("0", "+44", 1) if x.startswith("0", 0, 1) else "+44" + x if not x.startswith("+44") else x)
-        gb["phone_number"] = gb["phone_number"].apply(lambda x: x[0:3] + " " + x[3:7] + " " + x[7:])
-    
-        us = groups.get_group("US")
-        us["phone_number"] = us["phone_number"].replace({r"\-": "", r"\.": "", r"\(": "", r"\)": "", "x": ""}, regex=True)
-        us["phone_number"] = us["phone_number"].apply(lambda x: str(x))
-        us["phone_number"] = us["phone_number"].apply(lambda x: x.replace("001", "+1") if x.startswith("001", 0, 3) else "+1" + x if not x.startswith("+1", 0, 2) else x)
-        us["phone_number"] = us["phone_number"].apply(lambda x: x[0:2] + " " + x[2:5] + " " + x[5:8] + " " + x[8:])
-
-        # Concaternate the seperately cleaned dataframes and apply a length filter. 
-        # Numbers from all countries should be strings of 15 chars. in length.
-        legacy = pd.concat([gb, us, de])      
-        legacy["phone_number"] = legacy.loc[legacy["phone_number"].apply(lambda x: len(str(x)) == 15), "phone_number"]
         
         #Replace '\n' as seperators for lines in address column. Replace with commas.                                            
         legacy["address"] = legacy["address"].str.split("\\n")                                                  
         legacy["address"] = legacy["address"].apply(lambda x: ", ".join(x))
 
-        # Reformat date_of_birth and join_date columns to datetime64 and drop nan values.     
-        legacy["date_of_birth"] = legacy["date_of_birth"].apply(parse)  
-        legacy["join_date"] = legacy["join_date"].apply(parse)                     
-            
         # Replace mistaken instances of '@@' with '@' in email_address column.                                                                           
         legacy["email_address"] = legacy["email_address"].str.replace("@@", "@") 
+    
+        # Create a column with distinct entries in the orders table using drop_duplicates(). 
+        # Use the resultant merge col to perform an inner join to ensure 1:1 matching of pkey/
+        # fkey in SQL tables.
+        merge_col = orders["user_uuid"].drop_duplicates()
+        legacy = pd.merge(legacy, merge_col, on="user_uuid", how="inner")
 
-        # Drop NaN values, reset index and drop serperate index column. 
-        legacy.dropna(inplace=True)
+        # Reformat date_of_birth and join_date columns to datetime64 and drop nan values.     
+        legacy["date_of_birth"] = legacy["date_of_birth"].apply(parse)  
+        legacy["join_date"] = legacy["join_date"].apply(parse)  
+
+        # Reset index. 
         legacy.reset_index(drop=True, inplace=True)
-        legacy.drop(columns=["index"], inplace=True)
-        
+
         return legacy   
     
     
@@ -196,7 +193,7 @@ class DataCleaner:
         # Read .csv into dataframe
         csv_read = pd.read_csv("/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/productscsv.csv")
         products = pd.DataFrame(csv_read)
-        
+
         # Convert dtype of 'weight' column to perform manipulations.
         products["weight"] = products["weight"].astype("str")
 
@@ -219,15 +216,21 @@ class DataCleaner:
         products["x"] = products["x"].astype("str")
         products["x"] = products["x"].replace("nan", "")
 
-        # Concaternate filtered columns and perform reformatting.         
+        # Concaternate filtered columns and convert empty cells to NaN.         
         products["weight"] = products["x"] + products["non_kg"] + products["kg"]
         products.drop(columns=["x", "kg", "non_kg"], inplace=True)
         products.loc[products["weight"].isin([""]), "weight"] = np.nan
+        
+        # Handle two values with corupt or alternative formatting. 
+        products.loc[1779, "weight"] = 0.077
+        products.loc[1841, "weight"] = 0.453
+
+        # Drop NaN rows and perform final formatting steps. 
         products.dropna(inplace=True)
         products["weight"] = products["weight"].apply(lambda x: round(float(x), 4))
         products["weight"] = products["weight"].astype("float")
-        products.rename(columns={"weight": "product_weight (kg)"}, inplace=True)
-        
+        products.rename(columns={"weight": "product_weight"}, inplace=True)
+
         return products
     
 
@@ -259,30 +262,18 @@ class DataCleaner:
         products["category"] = products["category"].str.replace("-", " ")
 
         # Rename/drop columns for clarity; reset index.
-        products.rename(columns={"removed": "available", "product_price": "product_price (£)", "category": "product_category"}, inplace=True)
+        products.rename(columns={"removed": "available", "product_price": "product_price", "category": "product_category", "EAN": "ean"}, inplace=True)
         products.drop(columns=["Unnamed: 0"], inplace=True)
         products.reset_index(drop=True, inplace=True)
         
+        # Use regex to remove weights from product names. 
+        products["product_name"] = products["product_name"].str.replace(r"\b\d+g\b", "", regex=True)
+        products["product_name"] = products["product_name"].str.replace(r"\b\d+kg\b", "", regex=True)
+        products["product_name"] = products["product_name"].str.replace(r"\b\d+ml\b", "", regex=True)
+        products["product_name"] = products["product_name"].str.replace(r"\b\d+L\b", "", regex=True)
+        products["product_name"] = products["product_name"].str.replace(r"\b\d+oz\b", "", regex=True)
+
         return products
-    
-
-    def clean_orders_table(self):
-        """Cleans a dataframe of order data extracted from an AWS RDS.
-
-        Args:
-            None.
-
-        Returns:
-            A cleaned dataframe. See code comments for details of process.
-        """
-        # Extract orders table. 
-        orders = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "orders_table")
-
-        # Drop unneeded columns and set 'card_number' to object dtype. 
-        orders.drop(columns=["level_0", "index", "first_name", "last_name", "1"], inplace=True)
-        orders["card_number"] = orders["card_number"].apply(lambda x: str(x))
-        
-        return orders
     
 
     def clean_purchase_dates(self):
