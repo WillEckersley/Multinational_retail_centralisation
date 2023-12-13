@@ -24,7 +24,7 @@ LIMIT
 
 ---Top 6 months for sales---
 SELECT 
-	SUM(orders_table.product_quantity * dim_products.product_price) AS total_sales, 
+	ROUND(SUM(orders_table.product_quantity::numeric * dim_products.product_price::numeric), 2) AS total_sales, 
 	EXTRACT('month' from dim_date_times.purchase_date) AS month 
 FROM 
 	orders_table
@@ -173,19 +173,19 @@ GROUP BY
 ORDER BY
 	total_sales;
 	
----
-select 
-	avg(times.time_diff), 
-	times.year
-from
+---Average difference in time between sales by year---
+SELECT 
+	year,
+	avg(next_time_stamp) as actual_time_taken
+FROM
 	(
-	select 
-		distinct extract('year' from purchase_date) as year,
-		lead(purchase_time) OVER (PARTITION BY extract(year from purchase_date) ORDER BY purchase_time) - purchase_time AS time_diff
-	from 
+	SELECT
+		DISTINCT EXTRACAT(year FROM purchase_date) as year,
+		LEAD(purchase_time) OVER (PARTITION BY EXTRACT(year FROM purchase_date) ORDER BY purchase_time) - purchase_time AS next_time_stamp
+	FROM 
 		dim_date_times
-	) as times
-group by 
-	times.year
-order by 
-	avg(times.time_diff) desc
+	) AS times
+GROUP BY  
+	DISTINCT times.year			
+ORDER BY
+	AVG(times.next_time_stamp) DESC
