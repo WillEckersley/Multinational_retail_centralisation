@@ -22,30 +22,10 @@ ORDER BY
 LIMIT 
 	7;
 
----Total sales by month???--- distinct???
-WITH values AS (
-	SELECT orders_table.product_quantity * dim_products.product_price 
-	AS order_values, 
-	orders_table.date_uuid AS date
-	FROM orders_table
-	JOIN dim_products
-	ON orders_table.product_code = dim_products.product_code
-	)
-SELECT SUM(values.order_values) AS total_sales, 
-EXTRACT('month' from dim_date_times.purchase_datetime) AS month 
-FROM values
-JOIN dim_date_times
-ON values.date = dim_date_times.date_uuid
-GROUP BY month
-ORDER BY total_sales DESC
-LIMIT 7;
-
-select * from orders_table
-
----Alternatively:
+---Top 6 months for sales---
 SELECT 
 	SUM(orders_table.product_quantity * dim_products.product_price) AS total_sales, 
-	EXTRACT('month' from dim_date_times.purchase_datetime) AS month 
+	EXTRACT('month' from dim_date_times.purchase_date) AS month 
 FROM 
 	orders_table
 JOIN 
@@ -61,7 +41,7 @@ GROUP BY
 ORDER BY 
 	total_sales DESC
 LIMIT 
-	7;
+	6;
 
 ---Sales counts and products counts by online and physical ---
 WITH online AS 
@@ -139,8 +119,8 @@ ORDER BY
 --- Top total sales by year and month ---
 SELECT
 	ROUND(SUM(orders_table.product_quantity::numeric * dim_products.product_price::numeric), 2) AS total_sales,
-	EXTRACT('year' from dim_date_times.purchase_datetime) as year,
-	EXTRACT('month' from dim_date_times.purchase_datetime) as month
+	EXTRACT('year' from dim_date_times.purchase_date) as year,
+	EXTRACT('month' from dim_date_times.purchase_date) as month
 FROM
 	orders_table
 JOIN 
@@ -194,4 +174,18 @@ ORDER BY
 	total_sales;
 	
 ---
-
+select 
+	avg(times.time_diff), 
+	times.year
+from
+	(
+	select 
+		distinct extract('year' from purchase_date) as year,
+		lead(purchase_time) OVER (PARTITION BY extract(year from purchase_date) ORDER BY purchase_time) - purchase_time AS time_diff
+	from 
+		dim_date_times
+	) as times
+group by 
+	times.year
+order by 
+	avg(times.time_diff) desc
