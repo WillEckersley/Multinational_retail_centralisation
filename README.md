@@ -1,7 +1,7 @@
-# Multinational_retail_centralisation
+# Multinational Retail Centralisation
 Collating and cleaning data owned by a fictional multinational corporation in a PostgreSQL RDBMS. Querying and returning insights from the resultant database.
 
-![Alt text] (readme_images/header.png)
+![Alt text](readme_images/header.png)
 
 # Description
 
