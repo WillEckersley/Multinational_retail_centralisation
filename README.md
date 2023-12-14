@@ -17,14 +17,16 @@ Once schematised, the database was queried. This yielded a number of insights (t
 
 For instance, the queries quickly revealed the top 6 months for sales, differences in sales figures between online and physical outlets and the total sales/percentages of sales for each type of store (amongst other things - again - see comments in the included queries.sql file for further examples).
 
-Top 6 months for sales:
+### Top 6 months for sales:
 
 ![Top 6 months for sales](readme_images/sales_mnths.png)
 
-Sales counts and products counts by online and physical:
+### Sales counts and products counts by online and physical:
+
 ![Sales counts and products counts by online and physical](readme_images/online_phys.png)
 
-Total sales and percentages by store type:
+### Total sales and percentages by store type:
+
 ![Total sales and percentages by store type](readme_image/mnths_cents.png)
 
 The resultant database centralises the company's data and optomises it for querying. Such queries may then be exported for further analysis using other programmatic data manipulation tools e.g. python pandas, or visualised using e.g. Seaborn, Plotly, PowerBI or Tableau.  
@@ -75,4 +77,3 @@ python main.py
 # License
 
 Licensed under the Unlicense. 
-
