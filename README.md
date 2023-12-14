@@ -27,7 +27,7 @@ For instance, the queries quickly revealed the top 6 months for sales, differenc
 
 ### Total sales and percentages by store type:
 
-![Total sales and percentages by store type](readme_image/mnths_cents.png)
+![Total sales and percentages by store type](readme_images/mnths_cents.png)
 
 The resultant database centralises the company's data and optomises it for querying. Such queries may then be exported for further analysis using other programmatic data manipulation tools e.g. python pandas, or visualised using e.g. Seaborn, Plotly, PowerBI or Tableau.  
 
