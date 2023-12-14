@@ -15,6 +15,11 @@ A number of insights were gained from the querying process (to reproduce these r
 
 For instance, the queries quickly revealed the top 6 months for sales, diffences in sales figures between online and physical outlets and the total sales/percentages of sales for each type of store (amongst other things - see queries.sql comments for further examples).
 
+Top 6 months for sales:
 ![Top 6 months for sales](readme_images/sales_mnths.png)
+
+Sales counts and products counts by online and physical:
 ![Sales counts and products counts by online and physical](readme_images/online_phys.png)
-![Total sales and percentages by store type](readme_image/sales_mnths.png)
+
+Total sales and percentages by store type:
+![Total sales and percentages by store type](readme_image/mnths_cents.png)
