@@ -21,7 +21,6 @@ class DatabaseConnector:
             
             return credentials
     
-
     def init_db_engine(self):
         """Creates an SQLAlchemy engine for retrieving data from a specific AWS RDS.
         
@@ -49,7 +48,6 @@ class DatabaseConnector:
         
         return engine
 
-
     def upload_to_db(self, df, name):
         """Uploads data from Pandas dataframes to a specific SQL database.
 
@@ -75,7 +73,6 @@ class DatabaseConnector:
         # Create an engine to send the DataFrame to the target location. 
         with psycopg2.connect(host=host, user=user, password=password, database=db, port=port) as psy_connection:
             engine = sqlalchemy.create_engine(f"{type}+{api}://{user}:{password}@{host}:{port}/{db}")
-            database_uploader = df.to_sql(name, engine, if_exists="replace")
+            database_uploader = df.to_sql(name, engine, if_exists="replace", index=False)
         
         return database_uploader
-    
