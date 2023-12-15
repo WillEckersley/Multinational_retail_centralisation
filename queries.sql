@@ -174,18 +174,20 @@ ORDER BY
 	total_sales;
 	
 ---Average difference in time between sales by year---
-SELECT 
-	year,
-	avg(next_time_stamp) as actual_time_taken
-FROM
-	(
+WITH times AS 
+(
 	SELECT
-		DISTINCT EXTRACAT(year FROM purchase_date) as year,
+		DISTINCT EXTRACT(year FROM purchase_date) as year,
 		LEAD(purchase_time) OVER (PARTITION BY EXTRACT(year FROM purchase_date) ORDER BY purchase_time) - purchase_time AS next_time_stamp
 	FROM 
 		dim_date_times
-	) AS times
+	)
+SELECT 
+	year,
+	AVG(next_time_stamp) as actual_time_taken
+FROM
+	times
 GROUP BY  
 	DISTINCT times.year			
 ORDER BY
-	AVG(times.next_time_stamp) DESC
+	AVG(times.next_time_stamp) DESC;
