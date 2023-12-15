@@ -11,8 +11,6 @@ import re
 class DataCleaner:
 
 
-    engine = dbu.DatabaseConnector().init_db_engine()
-
     def clean_orders_table(self):
         """Cleans a dataframe of order data extracted from an AWS RDS.
 
@@ -23,13 +21,12 @@ class DataCleaner:
             A cleaned dataframe. See code comments for details of process.
         """
         # Extract orders table. 
-        orders = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "orders_table")
+        orders = dex.DataExtractor().read_rds_tables(dbu.DatabaseConnector().init_db_engine(), "orders_table")
 
         # Drop unneeded columns and set 'card_number' to object dtype. 
         orders.drop(columns=["level_0", "index", "first_name", "last_name", "1"], inplace=True)
         
         return orders
-
 
     def clean_user_data(self):
         """Cleans data extracted from a database stored in AWS RDS. 
@@ -40,17 +37,18 @@ class DataCleaner:
         Returns:
             A cleaned dataframe. See code comments for details of process.    
         """
-        # Read the dataframes into the program. 
+        # Read the dataframes into the program. Here, the orders dataframe is used to perform a
+        # quick inner join with the uuid in the users table. This is a simple way to ensure 1:1 
+        # matching of pkey/fkey in the db upload.   
         orders = DataCleaner().clean_orders_table()
-        legacy = dex.DataExtractor().read_rds_tables(DataCleaner.engine, "legacy_users")
+        legacy = dex.DataExtractor().read_rds_tables(dbu.DatabaseConnector().init_db_engine(), "legacy_users")
 
         # Drop redundant country and index columns and rename country_code to country.
-        # Drop phone_number column - data corruption extremely high. See the documentation for 
-        # details about how some of this data could be salvaged for alternative use cases. 
+        # Drop phone_number column - data corruption extremely high. 
         legacy.drop(columns=["country", "index", "phone_number"], axis="columns", inplace=True)                                                      
         legacy.rename(columns={"country_code": "country"}, inplace=True)
 
-        # Replace erroneous instances of "GGB in country column. 
+        # Replace erroneous instances of 'GGB' in country column. 
         legacy["country"] = legacy["country"].replace("GGB", "GB")
         
         #Replace '\n' as seperators for lines in address column. Replace with commas.                                            
@@ -66,15 +64,11 @@ class DataCleaner:
         merge_col = orders["user_uuid"].drop_duplicates()
         legacy = pd.merge(legacy, merge_col, on="user_uuid", how="inner")
 
-        # Reformat date_of_birth and join_date columns to datetime64 and drop nan values.     
+        # Reformat date_of_birth and join_date columns to datetime64 to catch mis-matched formatting.     
         legacy["date_of_birth"] = legacy["date_of_birth"].apply(parse)  
         legacy["join_date"] = legacy["join_date"].apply(parse)  
 
-        # Reset index. 
-        legacy.reset_index(drop=True, inplace=True)
-
         return legacy   
-    
     
     def clean_card_data(self):
         """Cleans credit card data stored in a pdf document in an AWS S3 bucket.
@@ -103,12 +97,11 @@ class DataCleaner:
         merge_col = orders["card_number"].drop_duplicates()
         card_data = pd.merge(card_data, merge_col, how="inner", on="card_number")
 
-        # Convert date_payment_confirmed to datetime64 format.
+        # Convert date_payment_confirmed to datetime64 format to catch mismatching formatting.
         card_data["date_payment_confirmed"] = card_data["date_payment_confirmed"].apply(parse) 
 
         return card_data
     
-
     def clean_store_data(self):
         """Cleans store card data stored in an AWS API.
 
@@ -131,6 +124,7 @@ class DataCleaner:
         store_data.drop(columns=["continent", "latitude", "lat", "longitude"], inplace=True)
 
         # Replace '\n' seperators in address column with commas.
+        store_data["address"] = store_data["address"].astype("str")
         store_data["address"] = store_data["address"].str.split("\\n")
         store_data["address"] = store_data["address"].apply(lambda x: ", ".join(x))
 
@@ -139,23 +133,20 @@ class DataCleaner:
         store_data.dropna(inplace=True)
         store_data.rename(columns={"country_code": "country"}, inplace=True)
 
-        # Remove erroneous alphabetical characters from staff number values and change dtype to int.
+        # Remove erroneous alphabetical characters from staff number values.
         store_data["staff_numbers"] = store_data["staff_numbers"].apply(lambda x: x if x.isnumeric() else x.replace("".join(filter(str.isalpha, x)), ""))
-        store_data["staff_numbers"] = store_data["staff_numbers"].astype("int")
 
         # Apply formatting to opening date column.
         store_data["opening_date"] = store_data["opening_date"].apply(parse)
 
-        # Handle the address and locality entries for the online store. 
+        # Handle the address and locality entries for the online store individually. 
         store_data.loc[0, "address"] = "Online"
         store_data.loc[0, "locality"] = "Online"
 
-        # Drop 'index' column and reset index. 
+        # Drop 'index' column
         store_data.drop(columns=["index"], inplace=True)
-        store_data.reset_index(drop=True, inplace=True)
 
         return store_data
-    
 
     def convert_product_weights(self):
         """Handles the conversion of the weights of products originally stored in a .csv file in an AWS bucket.
@@ -199,19 +190,17 @@ class DataCleaner:
         products.drop(columns=["x", "kg", "non_kg"], inplace=True)
         products.loc[products["weight"].isin([""]), "weight"] = np.nan
         
-        # Handle two values with corupt or alternative formatting. 
+        # Handle two values with corupt and alternative formatting. 
         products.loc[1779, "weight"] = 0.077
         products.loc[1841, "weight"] = 0.453
 
         # Drop NaN rows and perform final formatting steps. 
         products.dropna(inplace=True)
         products["weight"] = products["weight"].apply(lambda x: round(float(x), 4))
-        products["weight"] = products["weight"].astype("float")
         products.rename(columns={"weight": "product_weight"}, inplace=True)
 
         return products
     
-
     def clean_products_data(self):
         """Cleans the remaining data in the dataframe partially handled in the convert_product_weights function.
 
@@ -229,7 +218,7 @@ class DataCleaner:
         boolean_map = {"Still_avaliable": True, "Removed": False}
         products["removed"] = products["removed"].map(boolean_map)
         
-        # Parse dates stated in erroneious format and convert dtype to datetime64.
+        # Parse dates stated in erroneious format and convert dtype to datetime64 to catch inconsistent formatting.
         products["date_added"] = products["date_added"].apply(parse)
 
         # Remove '£' symbol from prices and convert dtype to float to allow arithmetical manipulations.
@@ -239,10 +228,9 @@ class DataCleaner:
         # Remove unnecessary '-' separators from values in 'category' column.
         products["category"] = products["category"].str.replace("-", " ")
 
-        # Rename/drop columns for clarity; reset index.
-        products.rename(columns={"removed": "available", "product_price": "product_price", "category": "product_category", "EAN": "ean"}, inplace=True)
+        # Rename/drop columns for clarity.
+        products.rename(columns={"removed": "available", "category": "product_category", "EAN": "ean"}, inplace=True)
         products.drop(columns=["Unnamed: 0"], inplace=True)
-        products.reset_index(drop=True, inplace=True)
         
         # Use regex to remove weights from product names. 
         products["product_name"] = products["product_name"].str.replace(r"\b\d+g\b", "", regex=True)
@@ -253,7 +241,6 @@ class DataCleaner:
 
         return products
     
-
     def clean_purchase_dates(self):
         """Cleans a dataframe of purchase times extracted from a .json file stored in AWS S3 bucket.
 
@@ -273,12 +260,11 @@ class DataCleaner:
         # Apply formatting to day and month columns and concaternate with timestsamp column in new datetime column.
         dates["day"] = dates["day"].apply(lambda x: str(x) + "-")
         dates["month"] = dates["month"].apply(lambda x: str(x) + "-")
-        dates["purchase_datetime"] = dates["day"] + dates["month"] + dates["year"] + " " + dates["timestamp"]
-        
-        # Datetime parse to correct minor errors and convert to datetime format.
-        dates["purchase_datetime"] = dates["purchase_datetime"].apply(parse)
+        dates["purchase_date"] = dates["day"] + dates["month"] + dates["year"]
 
-        # Drop original columns. 
-        dates.drop(columns=["time_period", "month", "day", "year", "timestamp"], inplace=True)
-       
-        return dates
+        # Drop original columns, rename timestamp to purchase time and rearange order of columns.
+        dates.rename(columns={"timestamp": "purchase_time"}, inplace=True) 
+        dates.drop(columns=["time_period", "month", "day", "year"], inplace=True)
+        dates = dates.iloc[:, [1, 2, 0]]
+
+        return dates   
