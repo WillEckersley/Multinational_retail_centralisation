@@ -1,6 +1,4 @@
 from dateutil.parser import parse
-
-
 import data_extraction as dex
 import database_utils as dbu
 import numpy as np
@@ -21,7 +19,8 @@ class DataCleaner:
             A cleaned dataframe. See code comments for details of process.
         """
         # Extract orders table. 
-        orders = dex.DataExtractor().read_rds_tables(dbu.DatabaseConnector().init_db_engine(), "orders_table")
+        yaml_location = "/Users/willeckersley/projects/Repositories/Multinational_retail_centralisation/db_creds.yaml"
+        orders = dex.DataExtractor().read_rds_tables(dbu.DatabaseConnector().create_database_connection(yaml_location), "orders_table")
 
         # Drop unneeded columns and set 'card_number' to object dtype. 
         orders.drop(columns=["level_0", "index", "first_name", "last_name", "1"], inplace=True)
@@ -39,9 +38,13 @@ class DataCleaner:
         """
         # Read the dataframes into the program. Here, the orders dataframe is used to perform a
         # quick inner join with the uuid in the users table. This is a simple way to ensure 1:1 
-        # matching of pkey/fkey in the db upload.   
-        orders = DataCleaner().clean_orders_table()
-        legacy = dex.DataExtractor().read_rds_tables(dbu.DatabaseConnector().init_db_engine(), "legacy_users")
+        # matching of pkey/fkey in the db upload. While this may not always be a desirable approach,
+        # due to duplication the view taken here is that the tradeoff is worth it to achieve integrity
+        # throughout a large and highly corrupt dataset. The merge is a temporary method to ensure 
+        # quick and accurate setup of the relationships to be ultimately generated int he SQL database.   
+        orders = self.clean_orders_table()
+        yaml_location = "/Users/willeckersley/projects/Repositories/Multinational_retail_centralisation/db_creds.yaml"
+        legacy = dex.DataExtractor().read_rds_tables(dbu.DatabaseConnector().create_database_connection(yaml_location), "legacy_users")
 
         # Drop redundant country and index columns and rename country_code to country.
         # Drop phone_number column - data corruption extremely high. 
@@ -80,7 +83,7 @@ class DataCleaner:
             A cleaned dataframe. See code comments for details of process.
         """
         # Extract data from remote pdf document and concaternate into one dataframe.
-        orders = DataCleaner().clean_orders_table()
+        orders = self.clean_orders_table()
         card_dfs = dex.DataExtractor().retrieve_pdf_data("https://data-handling-public.s3.eu-west-1.amazonaws.com/card_details.pdf")
         card_data = pd.concat(card_dfs)
 
