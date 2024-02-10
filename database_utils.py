@@ -6,8 +6,7 @@ import yaml
 
 class DatabaseConnector:
 
-
-    def read_db_creds(self):
+    def create_database_connection(self, yaml_location):
         """Reads in database credentials and stores them in a dictionary.
         
         Args:
@@ -16,35 +15,10 @@ class DatabaseConnector:
         Returns:
             A dictionary where the keys are labels for database credentials; the values strings or ints representing those credentials. 
         """
-        with open("/Users/willeckersley/projects/repositories/Multinational_retail_centralisation/db_creds.yaml", "r") as f: 
-            credentials = yaml.safe_load(f)
-            
-            return credentials
-    
-    def init_db_engine(self):
-        """Creates an SQLAlchemy engine for retrieving data from a specific AWS RDS.
-        
-        Args:
-            None.
-        
-        Returns:
-            An SQLAlchemy engine. 
-        """
-        # Read in the database credentials.
-        creds_dict = self.read_db_creds()
-
-        # Access source DB creds.
-        host = creds_dict["RDS_HOST"]
-        user = creds_dict["RDS_USER"]
-        password = creds_dict["RDS_PASSWORD"]
-        db = creds_dict["RDS_DATABASE"]
-        port = creds_dict["RDS_PORT"]
-        type = creds_dict["RDS_TYPE"]
-        api = creds_dict["RDS_API"]
-        
-        # Create an engine. 
-        with psycopg2.connect(host=host, user=user, password=password, database=db, port=port) as psy_connection:
-            engine = sqlalchemy.create_engine(f"{type}+{api}://{user}:{password}@{host}:{port}/{db}")
+        with open(yaml_location, "r") as f: 
+            creds = yaml.safe_load(f)
+            with psycopg2.connect(host=creds["HOST"], user=creds["USER"], password=creds["PASSWORD"], database=creds["DB"], port=creds["PORT"]) as connection:
+                engine = sqlalchemy.create_engine(f"{creds['TYPE']}+{creds['API']}://{creds['USER']}:{creds['PASSWORD']}@{creds['HOST']}:{creds['PORT']}/{creds['DB']}")
         
         return engine
 
@@ -58,21 +32,8 @@ class DatabaseConnector:
         Returns:
             An SQL table in the target database. 
         """
-        # Read in the database credentials.
-        creds_dict = self.read_db_creds()
-
-        #Access the target DB creds. 
-        host = creds_dict["SALES_HOST"]
-        user = creds_dict["SALES_USER"]
-        password = creds_dict["SALES_PASSWORD"]
-        db = creds_dict["SALES_DATABASE"]
-        port = creds_dict["SALES_PORT"]
-        type = creds_dict["SALES_TYPE"]
-        api = creds_dict["SALES_API"]
-        
-        # Create an engine to send the DataFrame to the target location. 
-        with psycopg2.connect(host=host, user=user, password=password, database=db, port=port) as psy_connection:
-            engine = sqlalchemy.create_engine(f"{type}+{api}://{user}:{password}@{host}:{port}/{db}")
-            database_uploader = df.to_sql(name, engine, if_exists="replace", index=False)
+        yaml_location = "/Users/willeckersley/projects/Repositories/Multinational_retail_centralisation/db_uploader_creds.yaml"
+        engine = self.create_database_connection(yaml_location)
+        database_uploader = df.to_sql(name, engine, if_exists="replace", index=False)
         
         return database_uploader
