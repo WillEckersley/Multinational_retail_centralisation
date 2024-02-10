@@ -1,8 +1,5 @@
 from sqlalchemy import text
-
-
 import boto3
-import database_utils as dbu
 import json
 import pandas as pd
 import requests
@@ -12,8 +9,8 @@ import tabula
 
 class DataExtractor:
 
-
-    def list_db_tables(self, engine):
+    @staticmethod
+    def list_db_tables(engine):
         """Prints a list of table names from an AWS RDS.
         
         Args:
@@ -63,9 +60,9 @@ class DataExtractor:
         """Prints a list of the number of stores stored at an API endpoint. This method is to be used only
         in conjunction with the method directly below it in the current codebase (retrieve_store_data). 
         This is because the number of stores must first be determined (450) in order to work out the range
-        used in the list comprehension returned by that function. Viz. there, the range represents the 
-        number of each store, stop value of the range thus equals the total number of stores extracted
-        here.  
+        used in the list comprehension returned by that function. In the comprehension in theretrieve_stores_data 
+        function the range represents the number of each store. The stop value of the range thus equals the total 
+        number of stores printed by this function.  
         
         Args:
             endpoint (str): the url of the API endpoint.
@@ -75,10 +72,13 @@ class DataExtractor:
         Returns:
             None.
         """
-        with open(header, "r") as f:
-            api = json.load(f)
-            response = requests.get(endpoint, headers=api)
-            print(response.json())
+        try:
+            with open(header, "r") as f:
+                api = json.load(f)
+                response = requests.get(endpoint, headers=api)
+                print(response.json())
+        except requests.RequestException as e:
+            print(f"An error occured: {e}")
 
     def retrieve_stores_data(self, endpoint, header):
         """Retrieves data about stores from an API endpoint.
@@ -92,10 +92,12 @@ class DataExtractor:
             A list containing data about stores in dict format.
         """
         with open(header, "r") as f:
-            api = json.load(f)
-            response_list = [requests.get(endpoint + str(num), headers=api).json() for num in range(0, 451)]
-            
-            return response_list
+            try:
+                api = json.load(f)
+                response_list = [requests.get(endpoint + str(num), headers=api).json() for num in range(0, 451)]
+                return response_list
+            except requests.RequestException as e:
+                print(f"An error occurredL {e}")
        
     def extract_from_s3(self, endpoint, filename, location):
         """Downloads a file from S3 to a local address.
